@@ -1,49 +1,93 @@
-import React from 'react'
-import { Outlet, Link } from "react-router-dom";
-function Register() {
+import React, { useState } from "react";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth, db, storage } from "../firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { doc, setDoc } from "firebase/firestore";
+import { useNavigate, Link } from "react-router-dom";
+
+const Register = () => {
+  const [err, setErr] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    setLoading(true);
+    e.preventDefault();
+    const displayName = e.target[0].value;
+    const email = e.target[1].value;
+    const password = e.target[2].value;
+    const file = e.target[3].files[0];
+
+    try {
+      // Create user
+      const res = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Create a unique image name
+      const date = new Date().getTime();
+      const storageRef = ref(storage, `${displayName + date}`);
+
+      await uploadBytesResumable(storageRef, file).then(() => {
+        getDownloadURL(storageRef).then(async (downloadURL) => {
+          try {
+            // Update profile
+            await updateProfile(res.user, {
+              displayName,
+              photoURL: downloadURL,
+            });
+            // Create user on firestore
+            await setDoc(doc(db, "users", res.user.uid), {
+              uid: res.user.uid,
+              displayName,
+              email,
+              photoURL: downloadURL,
+            });
+
+            // Create empty user chats on firestore
+            await setDoc(doc(db, "userChats", res.user.uid), {});
+            navigate("/");
+          } catch (err) {
+            console.log(err);
+            setErr(true);
+            setLoading(false);
+          }
+        });
+      });
+    } catch (err) {
+      setErr(true);
+      setLoading(false);
+    }
+  };
+
   return (
-    
-    <div class="h-screen flex items-center " style={{background:'#a8bcff'}}>
-    <div class="mx-auto w-1/4 bg-white rounded-2xl p-5">
-      <h1 className=' text-4xl font-mono underline text-center '>Chat Me</h1>
-      <h1 className=' text-2xl font-mono text-center '>Register</h1>
+    <div className="flex items-center justify-center bg-blue-300 h-screen">
+      <div className="w-96 p-8 bg-white rounded shadow-md">
+        <h1 className="text-2xl font-bold mb-6">Register</h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input required type="text" placeholder="Display Name" className="w-full p-2 border rounded" />
+          <input required type="email" placeholder="Email" className="w-full p-2 border rounded" />
+          <input required type="password" placeholder="Password" className="w-full p-2 border rounded" />
+          <input required type="file" id="file" className="hidden" />
+          <label htmlFor="file" className="cursor-pointer flex items-center space-x-2">
+            <img src="https://icon-library.com/images/add-icon-png/add-icon-png-27.jpg" alt="" className="w-6 h-6" />
+            <span>Add an Avatar</span>
+          </label>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-500 text-white p-2 rounded disabled:bg-gray-500 disabled:cursor-not-allowed"
+          >
+            Sign up
+          </button>
+          {loading && <span className="text-blue-500 text-sm">Uploading and compressing the image, please wait...</span>}
+          {err && <span className="text-red-500 text-sm">Something went wrong</span>}
 
-      <form>
-      <input type="text" 
-        placeholder='name'
-        className="shadow appearance-none focus:border-blue-500  border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline m-2"
-        />
-        <input type="email" 
-        placeholder='email'
-        className="shadow appearance-none focus:border-blue-500  border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline m-2"
-        />
-         <input type="password" 
-        placeholder='password'
-        className="shadow appearance-none border focus:border-blue-500  rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline m-2"
-        />
-        <div className="flex items-center justify-center w-full">
-    <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600 m-2">
-        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <svg className="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="https://static.vecteezy.com/system/resources/previews/000/423/286/original/avatar-icon-vector-illustration.jpg" fill="none" viewBox="0 0 20 16">
-                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-            </svg>
-            <p className="mb-2 text-sm text-gray-500 dark:text-gray-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">SVG, PNG, JPG, or GIF (MAX. 800x400px)</p>
-        </div>
-        <input id="dropzone-file" type="file" className="hidden" />
-    </label>
-</div>
-
-         
-
-        <button type='submit' className='p-2 rounded text-white bg-[#a8bcff] hover:bg-blue-400 w-full m-2'>Sign up</button>
-        
-      </form>
-      <h1 className='  font-mono text-center '> Already registered? <a className=' underline'> <Link to="/login">Login</Link></a></h1>
-
+        </form>
+        <p className="mt-4 text-sm">
+          Already have an account? <Link to="/login" className="text-blue-500">Login</Link>
+        </p>
+      </div>
     </div>
-  </div>
-  )
-}
+  );
+};
 
-export default Register
+export default Register;
